@@ -1,0 +1,72 @@
+name: Train and Deploy YOLOv11n
+
+on:
+  push:
+    branches:
+      - main  # Runs workflow when changes are pushed to the main branch
+  schedule:
+    - cron: "0 0 * * 0"  # Runs weekly (every Sunday at midnight)
+
+jobs:
+  train-model:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: "3.8"
+
+      - name: Install Dependencies
+        run: |
+          pip install ultralytics
+          pip install gdown
+
+      - name: Train Model on Ultralytics Hub
+        env:
+          ULTRALYTICS_API_KEY: ${{ secrets.ULTRALYTICS_API_KEY }}
+        run: |
+          yolo train model=yolov11n.pt data=dataset.yaml epochs=50 imgsz=640 project=runs/train
+
+      - name: Convert Model to ONNX
+        run: |
+          yolo export model=runs/train/exp/weights/best.pt format=onnx
+
+      - name: Upload ONNX Model to GitHub
+        uses: actions/upload-artifact@v3
+        with:
+          name: yolov11n.onnx
+          path: runs/train/exp/weights/best.onnx
+
+  deploy-model:
+    needs: train-model
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download ONNX Model
+        uses: actions/download-artifact@v3
+        with:
+          name: yolov11n.onnx
+          path: models/
+
+      - name: Deploy to Raspberry Pi
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.RPI_HOST }}
+          username: ${{ secrets.RPI_USER }}
+          password: ${{ secrets.RPI_PASSWORD }}
+          source: "models/yolov11n.onnx"
+          target: "/home/pi/models"
+
+      - name: Notify Team
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "Model Training & Deployment Complete"
+          body: "The YOLOv11n model has been trained, converted to ONNX, and deployed to the Raspberry Pi."
+          to: "team@example.com"
+          from: "GitHub Actions"
