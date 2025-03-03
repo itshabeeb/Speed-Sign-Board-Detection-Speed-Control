@@ -1,6 +1,5 @@
+onnxruntime
 opencv-python
-ultralytics
-albumentations
 numpy
-matplotlib
-
+ultralytics
+gdown
