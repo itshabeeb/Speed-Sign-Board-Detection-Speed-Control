@@ -1,3 +1,4 @@
+
 import os
 import sys
 import argparse
@@ -6,12 +7,12 @@ import time
 
 import cv2
 import numpy as np
-import onnxruntime as ort
+from ultralytics import YOLO
 
 # Define and parse user input arguments
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model', help='Path to ONNX model file (example: "your_model.onnx")',
+parser.add_argument('--model', help='Path to YOLO model file (example: "runs/detect/train/weights/best.pt")',
                     required=True)
 parser.add_argument('--source', help='Image source, can be image file ("test.jpg"), \
                     image folder ("test_dir"), video file ("testvid.mp4"), index of USB camera ("usb0"), or index of Picamera ("picamera0")', 
@@ -30,23 +31,18 @@ args = parser.parse_args()
 # Parse user inputs
 model_path = args.model
 img_source = args.source
-min_thresh = float(args.thresh)
+min_thresh = args.thresh
 user_res = args.resolution
 record = args.record
-
-
 
 # Check if model file exists and is valid
 if (not os.path.exists(model_path)):
     print('ERROR: Model path is invalid or model was not found. Make sure the model filename was entered correctly.')
     sys.exit(0)
 
-# Load the ONNX model into memory
-session = ort.InferenceSession(model_path)
-
-# Get input and output names
-input_name = session.get_inputs()[0].name
-output_name = session.get_outputs()[0].name
+# Load the model into memory and get labemap
+model = YOLO(model_path, task='detect')
+labels = model.names
 
 # Parse input to determine if image source is a file, folder, video, or USB camera
 img_ext_list = ['.jpg','.JPG','.jpeg','.JPEG','.png','.PNG','.bmp','.BMP']
@@ -114,7 +110,11 @@ elif source_type == 'video' or source_type == 'usb':
         ret = cap.set(3, resW)
         ret = cap.set(4, resH)
 
-
+elif source_type == 'picamera':
+    from picamera2 import Picamera2
+    cap = Picamera2()
+    cap.configure(cap.create_video_configuration(main={"format": 'RGB888', "size": (resW, resH)}))
+    cap.start()
 
 # Set bounding box colors (using the Tableu 10 color scheme)
 bbox_colors = [(164,120,87), (68,148,228), (93,97,209), (178,182,133), (88,159,106), 
@@ -162,60 +162,67 @@ while True:
     if resize == True:
         frame = cv2.resize(frame,(resW,resH))
 
-    # Preprocess frame for ONNX model
-    input_frame = cv2.resize(frame, (640, 640))
-    input_frame = cv2.cvtColor(input_frame, cv2.COLOR_BGR2RGB)
-    input_frame = input_frame.astype(np.float32)
-    input_frame = input_frame / 255.0 # Normalize to [0, 1]
-    input_frame = np.transpose(input_frame, (2, 0, 1))
-    input_frame = np.expand_dims(input_frame, axis=0)
     # Run inference on frame
-    outputs = session.run([output_name], {input_name: input_frame})[0]
+    results = model(frame, verbose=False)
 
-# Postprocess outputs and draw bounding boxes (adjust the post-processing logic based on your ONNX model's output format)
-object_count = 0
-for output in outputs:
-    xmin, ymin, xmax, ymax, conf, classidx = output[:6]
+    # Extract results
+    detections = results[0].boxes
 
-    if conf.any() > min_thresh:
-        # Check if classidx is an array, if so, get the first element.
-        if isinstance(classidx, np.ndarray):
-            classidx_scalar = int(classidx[0])
-        else:
-            classidx_scalar = int(classidx)
+    # Initialize variable for basic object counting example
+    object_count = 0
 
-        color = bbox_colors[classidx_scalar % 10]
-        cv2.rectangle(frame, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color, 2)
-        label = f'{classidx_scalar}: {int(conf.max()*100)}%'
-        labelSize, baseLine = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-        label_ymin = max(int(ymin), labelSize[1] + 10)
-        cv2.rectangle(frame, (int(xmin), label_ymin-labelSize[1]-10), (int(xmin)+labelSize[0], label_ymin+baseLine-10), color, cv2.FILLED)
-        cv2.putText(frame, label, (int(xmin), label_ymin-7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
-        object_count += 1
+    # Go through each detection and get bbox coords, confidence, and class
+    for i in range(len(detections)):
 
+        # Get bounding box coordinates
+        # Ultralytics returns results in Tensor format, which have to be converted to a regular Python array
+        xyxy_tensor = detections[i].xyxy.cpu() # Detections in Tensor format in CPU memory
+        xyxy = xyxy_tensor.numpy().squeeze() # Convert tensors to Numpy array
+        xmin, ymin, xmax, ymax = xyxy.astype(int) # Extract individual coordinates and convert to int
+
+        # Get bounding box class ID and name
+        classidx = int(detections[i].cls.item())
+        classname = labels[classidx]
+
+        # Get bounding box confidence
+        conf = detections[i].conf.item()
+
+        # Draw box if confidence threshold is high enough
+        if conf > 0.5:
+
+            color = bbox_colors[classidx % 10]
+            cv2.rectangle(frame, (xmin,ymin), (xmax,ymax), color, 2)
+
+            label = f'{classname}: {int(conf*100)}%'
+            labelSize, baseLine = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1) # Get font size
+            label_ymin = max(ymin, labelSize[1] + 10) # Make sure not to draw label too close to top of window
+            cv2.rectangle(frame, (xmin, label_ymin-labelSize[1]-10), (xmin+labelSize[0], label_ymin+baseLine-10), color, cv2.FILLED) # Draw white box to put label text in
+            cv2.putText(frame, label, (xmin, label_ymin-7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1) # Draw label text
+
+            # Basic example: count the number of objects in the image
+            object_count = object_count + 1
 
     # Calculate and draw framerate (if using video, USB, or Picamera source)
-    if source_type in ['video', 'usb', 'picamera']:
-        cv2.putText(frame, f'FPS: {avg_frame_rate:0.2f}', (10,20), cv2.FONT_HERSHEY_SIMPLEX, .7, (0,255,255), 2)
+    if source_type == 'video' or source_type == 'usb' or source_type == 'picamera':
+        cv2.putText(frame, f'FPS: {avg_frame_rate:0.2f}', (10,20), cv2.FONT_HERSHEY_SIMPLEX, .7, (0,255,255), 2) # Draw framerate
     
     # Display detection results
-    cv2.putText(frame, f'Number of objects: {object_count}', (10,40), cv2.FONT_HERSHEY_SIMPLEX, .7, (0,255,255), 2)
-    cv2.imshow('ONNX detection results', frame)
+    cv2.putText(frame, f'Number of objects: {object_count}', (10,40), cv2.FONT_HERSHEY_SIMPLEX, .7, (0,255,255), 2) # Draw total number of detected objects
+    cv2.imshow('YOLO detection results',frame) # Display image
     if record: recorder.write(frame)
 
     # If inferencing on individual images, wait for user keypress before moving to next image. Otherwise, wait 5ms before moving to next frame.
-    if source_type in ['image', 'folder']:
+    if source_type == 'image' or source_type == 'folder':
         key = cv2.waitKey()
-        
-    elif source_type in ['video', 'usb', 'picamera']:
-        key = cv2.waitKey()
+    elif source_type == 'video' or source_type == 'usb' or source_type == 'picamera':
+        key = cv2.waitKey(5)
     
     if key == ord('q') or key == ord('Q'): # Press 'q' to quit
         break
     elif key == ord('s') or key == ord('S'): # Press 's' to pause inference
         cv2.waitKey()
     elif key == ord('p') or key == ord('P'): # Press 'p' to save a picture of results on this frame
-        cv2.imwrite('capture.png', frame)
+        cv2.imwrite('capture.png',frame)
     
     # Calculate FPS for this frame
     t_stop = time.perf_counter()
@@ -230,7 +237,6 @@ for output in outputs:
 
     # Calculate average FPS for past frames
     avg_frame_rate = np.mean(frame_rate_buffer)
-
 
 
 # Clean up

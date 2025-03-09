@@ -12,6 +12,7 @@ __pycache__/
 venv/
 env/
 *.egg-info/
+mynev
 
 # Ignore Jupyter Notebook checkpoints
 .ipynb_checkpoints/
