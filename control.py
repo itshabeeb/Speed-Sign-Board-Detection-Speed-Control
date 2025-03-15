@@ -1,45 +1,37 @@
 import RPi.GPIO as GPIO
 import time
 
-# Set up GPIO pins
+# Define GPIO pins
 ENA = 18  # PWM pin for Motor A
 IN1 = 23  # Direction pin for Motor A
 IN2 = 24  # Direction pin for Motor A
+STOP_SIGNAL_PIN = 21  # Must match detect.py
 
+# Setup GPIO
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(ENA, GPIO.OUT)
 GPIO.setup(IN1, GPIO.OUT)
 GPIO.setup(IN2, GPIO.OUT)
+GPIO.setup(STOP_SIGNAL_PIN, GPIO.IN)  # Listen for stop signal
 
-# Set up PWM
-pwm = GPIO.PWM(ENA, 1000)  # 1 kHz frequency
-pwm.start(0)  # Start with 0% duty cycle
-
-def set_motor_speed(speed):
-    if speed == 20:
-        duty_cycle = 40  # 40% speed
-    elif speed == 40:
-        duty_cycle = 70  # 70% speed
-    elif speed == 60:
-        duty_cycle = 100  # 100% speed
-    else:
-        duty_cycle = 0  # Stop motor if unknown speed
-
-    # Set motor direction (forward example)
-    GPIO.output(IN1, GPIO.HIGH)
-    GPIO.output(IN2, GPIO.LOW)
-
-    # Adjust speed using PWM
-    pwm.ChangeDutyCycle(duty_cycle)
+pwm = GPIO.PWM(ENA, 1000)  # 1kHz PWM frequency
+pwm.start(50)  # Start motor at 50% speed
 
 try:
-    # Example: Respond to detected speeds
     while True:
-        detected_speed = int(input("Enter detected speed (20, 40, 60): "))
-        set_motor_speed(detected_speed)
-        time.sleep(1)  # Adjust as needed
+        stop_signal = GPIO.input(STOP_SIGNAL_PIN)  # Read signal from detect.py
+
+        if stop_signal == GPIO.HIGH:
+            print("[INFO] Stop signal received! Stopping motor.")
+            GPIO.output(IN1, GPIO.LOW)
+            GPIO.output(IN2, GPIO.LOW)  # Stop motor
+        else:
+            print("[INFO] No stop signal. Motor running.")
+            GPIO.output(IN1, GPIO.HIGH)
+            GPIO.output(IN2, GPIO.LOW)  # Move forward
+
+        time.sleep(0.1)  # Check every 100ms
+
 except KeyboardInterrupt:
-    print("Stopping motors...")
-finally:
     pwm.stop()
     GPIO.cleanup()
