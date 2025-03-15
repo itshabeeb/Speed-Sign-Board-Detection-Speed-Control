@@ -1,11 +1,13 @@
 import os
 import sys
 import argparse
+import time
+import glob
 
 import cv2
 import numpy as np
 from ultralytics import YOLO
-import RPi.GPIO as GPIO  # GPIO library for Raspberry Pi
+import RPi.GPIO as GPIO  # Raspberry Pi GPIO for motor control
 
 # Define and parse user input arguments
 parser = argparse.ArgumentParser()
@@ -14,10 +16,10 @@ parser.add_argument('--model', help='Path to YOLO model file (example: "runs/det
 parser.add_argument('--source', help='Image source, can be image file ("test.jpg"), \
                     image folder ("test_dir"), video file ("testvid.mp4"), index of USB camera ("usb0"), or index of Picamera ("picamera0")', 
                     required=True)
-parser.add_argument('--thresh', help='Minimum confidence threshold for displaying detected objects (example: "0.4")',
+parser.add_argument('--thresh', help='Minimum confidence threshold for displaying detected objects (default: "0.5")',
                     default=0.5)
 parser.add_argument('--resolution', help='Resolution in WxH to display inference results at (example: "640x480"), \
-                    otherwise, match source resolution',
+                    otherwise match source resolution',
                     default=None)
 parser.add_argument('--record', help='Record results from video or webcam and save it as "demo1.avi". Must specify --resolution argument to record.',
                     action='store_true')
@@ -42,7 +44,7 @@ GPIO.setup(IN1, GPIO.OUT)
 GPIO.setup(IN2, GPIO.OUT)
 
 # Set up PWM for motor control
-pwm = GPIO.PWM(ENA, 1000)  # 1 kHz PWM frequency
+pwm = GPIO.PWM(ENA, 1000)  # Set PWM frequency to 1 kHz
 pwm.start(0)  # Initially stopped
 
 def set_motor_speed(speed):
@@ -54,13 +56,13 @@ def set_motor_speed(speed):
     elif speed == 60:
         duty_cycle = 100  # 100% speed
     else:
-        duty_cycle = 0  # Stop motor for unknown/invalid speed
+        duty_cycle = 0  # Stop motor for invalid/unknown speed
 
     # Set motor direction to forward
     GPIO.output(IN1, GPIO.HIGH)
     GPIO.output(IN2, GPIO.LOW)
 
-    # Set the PWM duty cycle for speed control
+    # Adjust speed with PWM
     pwm.ChangeDutyCycle(duty_cycle)
 
 # Check if model file exists and is valid
@@ -73,8 +75,8 @@ model = YOLO(model_path, task='detect')
 labels = model.names
 
 # Parse input to determine source type
-img_ext_list = ['.jpg','.JPG','.jpeg','.JPEG','.png','.PNG','.bmp','.BMP']
-vid_ext_list = ['.avi','.mov','.mp4','.mkv','.wmv']
+img_ext_list = ['.jpg', '.jpeg', '.png', '.bmp']
+vid_ext_list = ['.avi', '.mov', '.mp4', '.mkv', '.wmv']
 
 if os.path.isdir(img_source):
     source_type = 'folder'
@@ -103,7 +105,7 @@ if user_res:
     resize = True
     resW, resH = int(user_res.split('x')[0]), int(user_res.split('x')[1])
 
-# Video capture setup
+# Initialize frame source (camera, video, etc.)
 if source_type in ['video', 'usb']:
     cap = cv2.VideoCapture(img_source if source_type == 'video' else usb_idx)
     if user_res:
@@ -115,29 +117,54 @@ elif source_type == 'picamera':
     cap.configure(cap.create_video_configuration(main={"format": 'RGB888', "size": (resW, resH)}))
     cap.start()
 
-# Main loop
+# Define colors for bounding boxes
+bbox_colors = [(164, 120, 87), (68, 148, 228), (93, 97, 209), (178, 182, 133), (88, 159, 106)]
+
+# Frame rate buffer
+frame_rate_buffer = []
+fps_avg_len = 200
+
+# Inference loop
 try:
     while True:
+        t_start = time.perf_counter()
+
+        # Capture frame
         ret, frame = cap.read() if source_type in ['video', 'usb'] else (True, cap.capture_array())
         if not ret or frame is None:
             print("End of stream or camera disconnected.")
             break
 
-        # Resize frame
+        # Resize frame if necessary
         if resize:
             frame = cv2.resize(frame, (resW, resH))
 
-        # Run YOLO inference
+        # Run inference
         results = model(frame, verbose=False)
         detections = results[0].boxes
 
         for i in range(len(detections)):
-            # Extract class, bounding box, and confidence
+            # Extract detection details
             classidx = int(detections[i].cls.item())
             classname = labels[classidx]
             conf = detections[i].conf.item()
+            xyxy = detections[i].xyxy.cpu().numpy().squeeze()  # Bounding box
+            xmin, ymin, xmax, ymax = xyxy.astype(int)
 
             if conf > min_thresh:
+                # Draw bounding box
+                color = bbox_colors[classidx % len(bbox_colors)]
+                cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
+
+                # Add label text
+                label = f'{classname}: {int(conf * 100)}%'
+                labelSize, baseLine = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                label_ymin = max(ymin, labelSize[1] + 10)
+                cv2.rectangle(frame, (xmin, label_ymin - labelSize[1] - 10),
+                              (xmin + labelSize[0], label_ymin + baseLine - 10), color, cv2.FILLED)
+                cv2.putText(frame, label, (xmin, label_ymin - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+
+                # Control motor based on detection
                 if classname == '20':
                     set_motor_speed(20)
                 elif classname == '40':
@@ -147,10 +174,24 @@ try:
                 else:
                     set_motor_speed(0)
 
+        # Calculate FPS
+        t_stop = time.perf_counter()
+        frame_rate_calc = 1 / (t_stop - t_start)
+        if len(frame_rate_buffer) >= fps_avg_len:
+            frame_rate_buffer.pop(0)
+        frame_rate_buffer.append(frame_rate_calc)
+        avg_frame_rate = np.mean(frame_rate_buffer)
+
+        # Add FPS overlay
+        cv2.putText(frame, f'FPS: {avg_frame_rate:.2f}', (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+
+        # Display the frame
         cv2.imshow("YOLO Detection Results", frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):  # Press 'q' to quit
+        if cv2.waitKey(1) & 0xFF == ord('q'):  # Quit on 'q' key
             break
+
 finally:
+    # Cleanup GPIO and resources
     pwm.stop()
     GPIO.cleanup()
     if source_type in ['video', 'usb']:
