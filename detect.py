@@ -1,60 +1,50 @@
-import os
-import sys
-import argparse
-import glob
-import time
 import cv2
+import torch
+import time
 import numpy as np
-import RPi.GPIO as GPIO  # Import GPIO
-from ultralytics import YOLO
+import RPi.GPIO as GPIO
 
-# Define GPIO setup
-STOP_SIGNAL_PIN = 21  # Choose an unused GPIO pin
+# Load trained YOLO model
+model = torch.hub.load('ultralytics/yolov5', 'custom', path='model.onnx')
+
+# Setup Raspberry Pi GPIO
+STOP_SIGNAL_PIN = 21  # GPIO pin to send signal
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(STOP_SIGNAL_PIN, GPIO.OUT)
 
-# Define and parse user input arguments
-parser = argparse.ArgumentParser()
-parser.add_argument('--model', required=True)
-parser.add_argument('--source', required=True)
-parser.add_argument('--thresh', default=0.5)
-parser.add_argument('--resolution', default=None)
-args = parser.parse_args()
-
-# Load model
-model_path = args.model
-model = YOLO(model_path, task='detect')
-labels = model.names  # Get class labels
-
-# Parse source
-img_source = args.source
-cap = cv2.VideoCapture(img_source if img_source.isnumeric() else int(img_source))
+# Start camera capture
+cap = cv2.VideoCapture(0)  # Adjust based on your camera
 
 while True:
     ret, frame = cap.read()
     if not ret:
         break
 
-    results = model(frame, verbose=False)
-    detections = results[0].boxes
+    # Perform detection
+    results = model(frame)
 
-    object_detected = False
-    for i in range(len(detections)):
-        classidx = int(detections[i].cls.item())
-        classname = labels[classidx]
+    # Extract detected classes
+    detected_class = None
+    for *box, conf, cls in results.xyxy[0]:  
+        detected_class = int(cls)  
 
-        if classname.lower() == "stop sign":  # Detect specific object
-            print("[INFO] Stop sign detected!")
-            GPIO.output(STOP_SIGNAL_PIN, GPIO.HIGH)  # Send signal to control.py
-            object_detected = True
-            break  # Stop checking further detections
+    # Map class index to speed values (ensure this matches your training labels)
+    class_to_speed = {0: 20, 1: 40, 2: 60, 3: "STOP"}  
+    if detected_class in class_to_speed:
+        detected_speed = class_to_speed[detected_class]
+        print(f"Detected sign: {detected_speed}")
 
-    if not object_detected:
-        GPIO.output(STOP_SIGNAL_PIN, GPIO.LOW)  # Ensure signal is off
+        # Send detected speed to `control.py` via GPIO
+        if detected_speed == "STOP":
+            GPIO.output(STOP_SIGNAL_PIN, GPIO.HIGH)  # Send stop signal
+        else:
+            GPIO.output(STOP_SIGNAL_PIN, GPIO.LOW)  # Clear stop signal
 
-    cv2.imshow('Detection', frame)
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+        # Save detected speed to a file for `control.py` to read
+        with open("speed_signal.txt", "w") as f:
+            f.write(str(detected_speed))
+
+    time.sleep(1)  # Adjust as needed
 
 cap.release()
 cv2.destroyAllWindows()
