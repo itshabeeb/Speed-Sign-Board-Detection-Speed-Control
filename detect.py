@@ -1,9 +1,8 @@
-import os
 import sys
 import argparse
 import time
 import glob
-
+import os
 import cv2
 import numpy as np
 from ultralytics import YOLO
@@ -34,36 +33,40 @@ user_res = args.resolution
 record = args.record
 
 # GPIO setup for motor control
-ENA = 18  # PWM pin for Motor A
-IN1 = 23  # Direction pin for Motor A
-IN2 = 24  # Direction pin for Motor A
+ENA = 18  # Left motor speed control
+IN1 = 23  # Left motor direction control 1
+IN2 = 24  # Left motor direction control 2
+ENB = 19  # Right motor speed control
+IN3 = 27  # Right motor direction control 1
+IN4 = 22  # Right motor direction control 2
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(ENA, GPIO.OUT)
 GPIO.setup(IN1, GPIO.OUT)
 GPIO.setup(IN2, GPIO.OUT)
+GPIO.setup(ENB, GPIO.OUT)
+GPIO.setup(IN3, GPIO.OUT)
+GPIO.setup(IN4, GPIO.OUT)
 
-# Set up PWM for motor control
-pwm = GPIO.PWM(ENA, 1000)  # Set PWM frequency to 1 kHz
-pwm.start(0)  # Initially stopped
+# Set up PWM for motor speed control
+pwm_left = GPIO.PWM(ENA, 1000)  # 1 kHz PWM frequency for left motors
+pwm_right = GPIO.PWM(ENB, 1000)  # 1 kHz PWM frequency for right motors
+pwm_left.start(0)  # Initially stopped
+pwm_right.start(0)  # Initially stopped
 
-def set_motor_speed(speed):
-    """Set motor speed based on detected speed sign."""
-    if speed == 20:
-        duty_cycle = 40  # 40% speed
-    elif speed == 40:
-        duty_cycle = 70  # 70% speed
-    elif speed == 60:
-        duty_cycle = 100  # 100% speed
-    else:
-        duty_cycle = 0  # Stop motor for invalid/unknown speed
-
-    # Set motor direction to forward
+def set_motor_speed(left_speed, right_speed):
+    """Control motor speeds for left and right motors."""
+    # Set direction for left motor (forward)
     GPIO.output(IN1, GPIO.HIGH)
     GPIO.output(IN2, GPIO.LOW)
 
-    # Adjust speed with PWM
-    pwm.ChangeDutyCycle(duty_cycle)
+    # Set direction for right motor (forward)
+    GPIO.output(IN3, GPIO.HIGH)
+    GPIO.output(IN4, GPIO.LOW)
+
+    # Set speed for both motors
+    pwm_left.ChangeDutyCycle(left_speed)
+    pwm_right.ChangeDutyCycle(right_speed)
 
 # Check if model file exists and is valid
 if not os.path.exists(model_path):
@@ -166,13 +169,13 @@ try:
 
                 # Control motor based on detection
                 if classname == '20':
-                    set_motor_speed(20)
+                    set_motor_speed(40, 40)  # Slow speed for both sides
                 elif classname == '40':
-                    set_motor_speed(40)
+                    set_motor_speed(70, 70)  # Medium speed
                 elif classname == '60':
-                    set_motor_speed(60)
+                    set_motor_speed(100, 100)  # Full speed
                 else:
-                    set_motor_speed(0)
+                    set_motor_speed(0, 0)  # Stop motors
 
         # Calculate FPS
         t_stop = time.perf_counter()
@@ -192,7 +195,8 @@ try:
 
 finally:
     # Cleanup GPIO and resources
-    pwm.stop()
+    pwm_left.stop()
+    pwm_right.stop()
     GPIO.cleanup()
     if source_type in ['video', 'usb']:
         cap.release()
