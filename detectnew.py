@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 from gpiozero import Motor, PWMOutputDevice
-
+import os
 # Define and parse user input arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', help='Path to YOLO model file (example: "runs/detect/train/weights/best.pt")',
