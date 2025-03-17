@@ -5,13 +5,13 @@ import numpy as np
 from ultralytics import YOLO
 from gpiozero import Motor, PWMOutputDevice
 import os
-import sys
+
 # Define and parse user input arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', help='Path to YOLO model file (example: "runs/detect/train/weights/best.pt")',
                     required=True)
 parser.add_argument('--source', help='Image source, can be image file ("test.jpg"), \
-                    image folder ("test_dir"), video file ("testvid.mp4"), index of USB camera ("usb0"), or index of Picamera ("picamera0")', 
+                    image folder ("test_dir"), video file ("testvid.mp4"), index of USB camera ("usb0"), or index of Picamera ("picamera0")',
                     required=True)
 parser.add_argument('--thresh', help='Minimum confidence threshold for displaying detected objects (default: "0.5")',
                     default=0.5)
@@ -39,23 +39,29 @@ ENB = PWMOutputDevice(19)  # Right motor speed control
 left_motor = Motor(forward=23, backward=24)  # Left motors: IN1, IN2
 right_motor = Motor(forward=27, backward=22)  # Right motors: IN3, IN4
 
-# Set motors to default backward direction
-def set_motor_speed(left_speed, right_speed):
+def set_motor_speed(left_speed, right_speed, direction="backward"):
     """
-    Sets the speed and default direction (backward).
+    Controls motor speed and direction.
+    - left_speed: Speed for left motors (0 to 1)
+    - right_speed: Speed for right motors (0 to 1)
+    - direction: "forward" or "backward" (default: backward)
     """
-    # Set motor speeds (0 to 1 scale)
-    ENA.value = left_speed
-    ENB.value = right_speed
+    # Set PWM speeds
+    ENA.value = left_speed  # Left motor speed
+    ENB.value = right_speed  # Right motor speed
 
-    # Run motors in backward direction
-    left_motor.backward()
-    right_motor.backward()
+    # Set direction
+    if direction == "forward":
+        left_motor.forward()
+        right_motor.forward()
+    elif direction == "backward":
+        left_motor.backward()
+        right_motor.backward()
 
 # Check if model file exists and is valid
 if not os.path.exists(model_path):
     print('ERROR: Model path is invalid or model was not found. Make sure the model filename was entered correctly.')
-    sys.exit(0)
+    exit(0)
 
 # Load the YOLO model
 model = YOLO(model_path, task='detect')
@@ -75,7 +81,7 @@ elif os.path.isfile(img_source):
         source_type = 'video'
     else:
         print(f'File extension {ext} is not supported.')
-        sys.exit(0)
+        exit(0)
 elif 'usb' in img_source:
     source_type = 'usb'
     usb_idx = int(img_source[3:])
@@ -84,7 +90,7 @@ elif 'picamera' in img_source:
     picam_idx = int(img_source[8:])
 else:
     print(f'Input {img_source} is invalid. Please try again.')
-    sys.exit(0)
+    exit(0)
 
 # Parse user-specified display resolution
 resize = False
@@ -130,6 +136,8 @@ try:
         results = model(frame, verbose=False)
         detections = results[0].boxes
 
+        detected_speed = None  # Reset detected speed for every frame
+
         for i in range(len(detections)):
             # Extract detection details
             classidx = int(detections[i].cls.item())
@@ -151,15 +159,23 @@ try:
                               (xmin + labelSize[0], label_ymin + baseLine - 10), color, cv2.FILLED)
                 cv2.putText(frame, label, (xmin, label_ymin - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
 
-                # Control motor based on detection
-                if classname == '20':
-                    set_motor_speed(0.4, 0.4)  # Slow speed for both sides
-                elif classname == '40':
-                    set_motor_speed(0.7, 0.7)  # Medium speed
-                elif classname == '60':
-                    set_motor_speed(1.0, 1.0)  # Full speed
-                else:
-                    set_motor_speed(0.0, 0.0)  # Stop motors
+                # Filter detection for speed signs
+                if classname in ["Speed20", "Speed40", "Speed60"]:
+                    detected_speed = classname
+
+        # Adjust motors based on detected speed
+        if detected_speed == "Speed20":
+            print("Speed 20 detected: Slowing down.")
+            set_motor_speed(0.4, 0.4, direction="forward")
+        elif detected_speed == "Speed40":
+            print("Speed 40 detected: Medium speed.")
+            set_motor_speed(0.7, 0.7, direction="forward")
+        elif detected_speed == "Speed60":
+            print("Speed 60 detected: Full speed ahead.")
+            set_motor_speed(1.0, 1.0, direction="forward")
+        else:
+            print("No speed sign detected: Defaulting to backward.")
+            set_motor_speed(0.3, 0.3, direction="backward")
 
         # Calculate FPS
         t_stop = time.perf_counter()
