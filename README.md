@@ -18,7 +18,7 @@ The dataset used to train the model was created entirely from scratch. I manuall
 - *Classes*: 4 (20, 40, 60, STOP)
 - *Per Class Samples*: ~2,600 images
 - *Preprocessing*: Roboflow for annotation & augmentation
-- *Base Model*: YOLOv11 pre-trained on the COCO dataset
+- *Base Model*: YOLOv11n pre-trained on the COCO dataset
 - *Fine-Tuning*: Done using the Ultralytics YOLOv8 implementation
 
 ## Model Training
@@ -41,13 +41,15 @@ The YOLOv11n model was fine-tuned for 100 epochs with an image size of 640 and a
 ## Installation Steps
 
 - Connect the GPIO Pins to the Motor Driver in such a way that:
-  - GPIO12 (PIN 12) to ENA 
-  - GPIO21 (PIN 40) to ENB 
-  - GPIO16 (PIN 36) to IN1
-  - GPIO12 (PIN 32) to IN2
-  - GPIO 6 (PIN 31) to IN3
-  - GPIO 5 (PIN 29) to IN4
-  - GND    (PIN39)  to GND
+  |GPIO Pins|Motor Driver|
+  |---------|------------|
+  | GPIO12 (PIN 12)| ENA | 
+  | GPIO21 (PIN 40)| ENB |
+  | GPIO16 (PIN 36)| IN1 |
+  | GPIO12 (PIN 32)| IN2 |
+  | GPIO 6 (PIN 31)| IN3 |
+  | GPIO 5 (PIN 29)| IN4 |
+  | GND    (PIN39) | GND |
 
 ## Deployment
 
