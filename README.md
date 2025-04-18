@@ -18,11 +18,12 @@ The dataset used to train the model was created entirely from scratch. I manuall
 - *Classes*: 4 (20, 40, 60, STOP)
 - *Per Class Samples*: ~2,600 images
 - *Preprocessing*: Roboflow for annotation & augmentation
-- *Base Model*: YOLOv11n pre-trained on the COCO dataset
-- *Fine-Tuning*: In Google Colab with Utralytics YOLO11n implementation
 
 ## Model Training
 
+- *Base Model*: YOLOv11n pre-trained on the COCO dataset
+- *Fine-Tuning*: In Google Colab with Utralytics YOLO11n implementation
+  
 The YOLOv11n model was fine-tuned for 100 epochs with an image size of 640 and a patience of 100. After optimization using PyTorch, the final model size is just 5.2 MB, making it ideal for Raspberry Pi 5 deployment.
 
 **Performance Metrics:**
