@@ -1,7 +1,7 @@
 # Speed Sign Board Detection using YOLOv11 and Speed Control System
 
 ## Overview
-This project explores speed control in real-life scenarios such as hospital zones, school zones, and highways, where different speed limits are critical for safety. The goal is to build a system that can detect speed signboards and adjust a car’s speed accordingly—just like how vehicles should behave in the real world.
+Our project explores speed control in real-life scenarios such as hospital zones, school zones, and highways, where different speed limits are critical for safety. The goal is to build a system that can detect speed signboards and adjust a car’s speed accordingly—just like how vehicles should behave in the real world.
 
 To achieve this, our team developed a custom YOLOv11 model, a type of deep learning-based object detection algorithm. This model is trained to recognize speed signs like 20, 40, 60, and STOP.
 
