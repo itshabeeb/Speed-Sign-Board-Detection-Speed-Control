@@ -13,29 +13,30 @@ It's a great example of how computer vision and robotics can come together to cr
 ## Dataset Preparation
 
 The dataset used to train the model was created entirely from scratch. I manually captured images of speed signboards (20, 40, 60, STOP) in various settings. These images were then annotated and augmented using Roboflow, resulting in a clean and diverse dataset.
-o Total Images: 10,399
-o Classes: 4 (20, 40, 60, STOP)
-o Per Class Samples: ~2,600 images
-o Preprocessing: Roboflow for annotation & augmentation
-o Base Model: YOLOv11 pre-trained on the COCO dataset
-o Fine-Tuning: Done using the Ultralytics YOLOv8 implementation
+
+- *Total Images*: 10,399
+- *Classes*: 4 (20, 40, 60, STOP)
+- *Per Class Samples*: ~2,600 images
+- *Preprocessing*: Roboflow for annotation & augmentation
+- *Base Model*: YOLOv11 pre-trained on the COCO dataset
+- *Fine-Tuning*: Done using the Ultralytics YOLOv8 implementation
 
 ## Model Training
 
 The YOLOv11n model was fine-tuned for 100 epochs with an image size of 640 and a patience of 100. After optimization using PyTorch, the final model size is just 5.2 MB, making it ideal for Raspberry Pi 5 deployment.
 
 **Performance Metrics:**
-o Precision: 96.9%
-o Recall: 93.0%
-o mAP@0.5: 95.7%
-o mAP@0.5:0.95: 85.2%
+- *Precision*: 96.9%
+- *Recall*: 93.0%
+- *mAP@0.5*: 95.7%
+- *mAP@0.5:0.95*: 85.2%
 
 ## Components Setup
 
-- **Raspberry Pi 5** - The Main Processing Unit
-- **Camera Module**  - To Capture real-time video for signboard detection.
-- **LN298N Motor Driver and 4BO Motors** - To control the car's movement
-- **Battery Powered Power Supply** - To Power the Raspberry Pi and Motors
+- *Raspberry Pi 5* - The Main Processing Unit
+- *Camera Module*  - To Capture real-time video for signboard detection.
+- *LN298N Motor Driver and 4BO Motors* - To control the car's movement
+- *Battery Powered Power Supply* - To Power the Raspberry Pi and Motors
 
 ## Installation Steps
 
@@ -50,8 +51,8 @@ o mAP@0.5:0.95: 85.2%
 
 ## Deployment
 
-- **OpenCV** - used for video processing tasks, for reading from the live camera, pre-processing frames for the YOLO Model, and potentially draw bounding boxes around the detected signs.
-- **gpiozero** - used for interfacing with Raspberry Pi's GPIO Pin, which is used to control the car's motors.    
+- *OpenCV* - used for video processing tasks, for reading from the live camera, pre-processing frames for the YOLO Model, and potentially draw bounding boxes around the detected signs.
+- *gpiozero* - used for interfacing with Raspberry Pi's GPIO Pin, which is used to control the car's motors.    
 
 ## Usage 
 
