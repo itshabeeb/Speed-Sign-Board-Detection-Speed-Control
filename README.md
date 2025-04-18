@@ -1,7 +1,15 @@
-# Speed Sign Board Detection and Speed Control System
+# Speed Sign Board Detection using YOLOv11 and Speed Control System
 
 ## Overview
-The project utilizes Deep Learning to detect speed signboards from a live stream. Based on the detected sign, it controls a motor and influences the movement of a car. It integrates computer vision with robotics to enable semi-autonomous behaviour based on environmental cues.
+This project explores speed control in real-life scenarios such as hospital zones, school zones, and highways, where different speed limits are critical for safety. The goal is to build a system that can detect speed signboards and adjust a car’s speed accordingly—just like how vehicles should behave in the real world.
+
+To achieve this, our team developed a custom YOLOv11 model, a type of deep learning-based object detection algorithm. This model is trained to recognize speed signs like 20, 40, 60, and STOP.
+
+The entire dataset used for training was created from scratch by capturing photos of speed signboards in various settings. Each image was carefully annotated and augmented using Roboflow. The final model was fine-tuned from a version of YOLOv11 pre-trained on the COCO dataset, which gave it a strong foundation to learn from fewer custom images.
+
+In the prototype setup, the trained model runs in a simulated environment representing real-world locations. When it detects a speed signboard, the system automatically sends signals to a motor, adjusting the speed or movement of a small car—either slowing it down, speeding it up, or stopping it based on the sign detected.
+
+This project is a hands-on example of how computer vision and robotics can work together to create smart, responsive systems that react to their environment—paving the way for semi-autonomous vehicles and real-world safety applications.
 
 ## Key Features
 
@@ -15,7 +23,7 @@ The project utilizes Deep Learning to detect speed signboards from a live stream
 ## Software Components
 
 - **Python** - Used for implementing Deep Learning Logic and Motor Control Logic
-- **YOLO** - A Real-time object detection system used for identifying signboards. We utilize Ultralytics YOLOv8 implementation of YOLO for inference.
+- **YOLOv11** - A Real-time object detection system used for identifying signboards. We utilize Ultralytics YOLOv8 implementation of YOLO for inference.
 - **OpenCV** - used for video processing tasks, for reading from the live camera, pre-processing frames for the YOLO Model, and potentially draw bounding boxes around the detected signs.
 - **gpiozero** - used for interfacing with Raspberry Pi's GPIO Pin, which is used to control the car's motors.
 ## Installation Steps
