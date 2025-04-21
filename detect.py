@@ -29,7 +29,7 @@ user_res = args.resolution
 record = args.record
 
 # Output file for storing detected speed signs
-SPEED_FILE = "detected_speed.txt"
+SPEED_FILE = "detected_speed.txt" # File to store detected speed sign info
 CONFIDENCE_THRESHOLD = 0.65  # Higher threshold for confirming speed sign detection
 
 # Check if the provided model path is valid
@@ -113,6 +113,13 @@ frame_rate_buffer = []
 fps_avg_len = 200  # Average FPS over last 200 frames
 img_count = 0  # To keep track of images processed
 
+# Detection buffer to track repeated high-confidence detections
+high_conf_buffer = []
+pause_detection = False
+pause_start_time = None
+frame_wait_after_detection = 3  # seconds
+required_count_for_confirmation = 5
+
 # Begin processing loop
 try:
     while True:
@@ -145,32 +152,38 @@ try:
         results = model(frame, verbose=False)
         detections = results[0].boxes  # Get detection boxes
 
-        high_confidence_detections = {}
-
-        # Loop over detections to filter speed signs with high confidence
-        for detection in detections:
-            class_idx = int(detection.cls.item())  # Get class index
-            class_name = labels[class_idx]  # Get class name (e.g., Speed20)
-            conf = detection.conf.item()  # Confidence score
+       # Pause logic handling
+        if pause_detection:
+            if time.time() - pause_start_time >= frame_wait_after_detection:
+                pause_detection = False
+                high_conf_buffer.clear()
+            else:
+                # During pause, skip detection and show the frame as-is
+                if source_type != 'image' and source_type != 'folder':
+                    cv2.imshow('YOLO detection results', frame)
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord('q'):
+                        break
+                continue
+       # Process high confidence detections
+        for i in range(len(detections)):
+            conf = detections.conf[i].item()
+            class_id = int(detections.cls[i].item())
+            class_name = labels[class_id]
 
             if conf > CONFIDENCE_THRESHOLD and class_name in ["Speed60", "Speed40", "Speed20", "Stop"]:
-                print(f"High Confidence Speed Sign Detected: {class_name} with Confidence: {conf:.2f}")
-                high_confidence_detections[class_name] = high_confidence_detections.get(class_name, 0) + 1
+                high_conf_buffer.append(class_name)
 
-        # Choose the most frequently detected speed sign
-        most_frequent_speed = None
-        max_count = 0
-        for speed, count in high_confidence_detections.items():
-            if count > max_count:
-                most_frequent_speed = speed
-                max_count = count
-
-        # Write detected speed sign to a text file
-        with open(SPEED_FILE, "w") as f:
-            if most_frequent_speed:
-                f.write(most_frequent_speed)
-            else:
-                f.write("None")
+        # Only proceed if we have 5 or more consecutive detections
+        if len(high_conf_buffer) >= required_count_for_confirmation:
+            most_common_class = max(set(high_conf_buffer), key=high_conf_buffer.count)
+            if high_conf_buffer.count(most_common_class) >= required_count_for_confirmation:
+                with open(SPEED_FILE, "w") as f:
+                    f.write(most_common_class)
+                print(f"[INFO] Detected and confirmed: {most_common_class}")
+                pause_detection = True
+                pause_start_time = time.time()
+                high_conf_buffer.clear()
 
         # Draw boxes and labels for all detections above the minimum threshold
         object_count = 0
