@@ -37,15 +37,15 @@ def set_robot_speed(speed):
 def process_detected_speed(detected_speed):
     if detected_speed == "Speed60":
         print("Speed 60 received: Moving forward at high speed.")
-        set_robot_speed(0.8)
+        set_robot_speed(0.9)
         robot.forward()
     elif detected_speed == "Speed40":
         print("Speed 40 received: Moving forward at moderate speed.")
-        set_robot_speed(0.4)
+        set_robot_speed(0.5)
         robot.forward()
     elif detected_speed == "Speed20":
         print("Speed 20 received: Moving forward at low speed.")
-        set_robot_speed(0.2)
+        set_robot_speed(0.3)
         robot.forward()
     elif detected_speed == "Stop":
         print("STOP sign received: Stopping robot.")
