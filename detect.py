@@ -183,12 +183,12 @@ try:
 
                 # Check if confidence is above threshold
                 if conf > CONFIDENCE_THRESHOLD:
-					if classname in ['Speed20','Speed40','Speed60']:
-						if class_detection_count[classname] < 3:  # Less than 3 detections for this class
-							class_detection_count[classname] += 1  # Increment the count
+		    if classname in ['Speed20','Speed40','Speed60']:
+		        if class_detection_count[classname] < 3:  # Less than 3 detections for this class
+			    class_detection_count[classname] += 1  # Increment the count
                     elif classname =='Stop':
-						if class_detection_count[classname] <5:
-							class_detection_count[classname] += 1   
+		        if class_detection_count[classname] <5:
+		            class_detection_count[classname] += 1   
                     else:
                         # Only log to file and reset the count if it's a new class
                         if detected_class[classname] == False:  # New class detected
@@ -199,8 +199,7 @@ try:
                                 if key != classname:
                                     detected_class[key] = False
                         # Reset the count after threshold is reached to avoid repeated detections
-                        if (classname in ['Speed20', 'Speed40', 'Speed60'] and class_detection_count[classname] == 3) or \
-                           (classname == 'Stop' and class_detection_count[classname] == 5):
+                    if (classname in ['Speed20', 'Speed40', 'Speed60'] and class_detection_count[classname] == 3) or (classname == 'Stop' and class_detection_count[classname] == 5):
                             class_detection_count[classname] = 0
 
         # Display FPS and object count on frame
