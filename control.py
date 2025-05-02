@@ -2,27 +2,27 @@ import time
 from gpiozero import Robot, Motor, PWMOutputDevice
 
 # Motor setup - using BCM GPIO numbers with physical pin numbers in comments
-right_motor_forward = 16  # PIN 36
-right_motor_backward = 12 # PIN 32
-right_motor_enable_pin = 18  # PIN 12 (ENA) - Store the PIN NUMBER
+left_motor_forward = 16  # PIN 36
+left_motor_backward = 12 # PIN 32
+left_motor_enable_pin = 18  # PIN 12 (ENA) - Store the PIN NUMBER
 
-left_motor_forward = 6   # PIN 31
-left_motor_backward = 5  # PIN 29
-left_motor_enable_pin = 21  # PIN 40 (ENB) - Store the PIN NUMBER
+right_motor_forward = 6   # PIN 31
+right_motor_backward = 5  # PIN 29
+right_motor_enable_pin = 21  # PIN 40 (ENB) - Store the PIN NUMBER
 
 # Initialize PWMOutputDevice for speed control
-left_motor_pwm = PWMOutputDevice(left_motor_enable_pin)
 right_motor_pwm = PWMOutputDevice(right_motor_enable_pin)
+left_motor_pwm = PWMOutputDevice(left_motor_enable_pin)
 
 # Create the Motor objects, WITHOUT the enable parameter
-left = Motor(forward=left_motor_forward, backward=left_motor_backward)
 right = Motor(forward=right_motor_forward, backward=right_motor_backward)
+left = Motor(forward=left_motor_forward, backward=left_motor_backward)
 
 # Create the Robot object
-robot = Robot(left=left, right=right)
+robot = Robot(right=right, left=left)
 
 # Initialize robot speed (duty cycle)
-DEFAULT_SPEED = 0.5
+DEFAULT_SPEED = 0.7
 
 # File to read the detected speed from
 SPEED_FILE = "detected_speed.txt"
@@ -31,8 +31,8 @@ def set_robot_speed(speed):
     """
     Update the robot's speed (duty cycle from 0.0 to 1.0).
     """
-    left_motor_pwm.value = speed
     right_motor_pwm.value = speed
+    left_motor_pwm.value = speed
 
 def process_detected_speed(detected_speed):
     if detected_speed == "Speed60":
@@ -83,5 +83,5 @@ if __name__ == "__main__":
 
     finally:
         robot.stop()
-        left_motor_pwm.close()
         right_motor_pwm.close()
+        left_motor_pwm.close()
