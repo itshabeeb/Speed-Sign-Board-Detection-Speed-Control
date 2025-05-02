@@ -4,7 +4,8 @@ import sys  # For system-related operations like exiting the program
 import argparse  # For parsing command-line arguments
 import glob  # For handling file path patterns
 import time  # For measuring time and calculating FPS
-
+import atexit
+import signal
 # OpenCV for image and video handling
 import cv2
 import numpy as np  # For numerical operations
@@ -29,8 +30,22 @@ user_res = args.resolution
 record = args.record
 
 # Output file for storing detected speed signs
-SPEED_FILE = "detected_speed.txt" # File to store detected speed sign info
+SPEED_FILE = "detected_speed.txt"  # File to store detected speed sign info
 CONFIDENCE_THRESHOLD = 0.65  # Higher threshold for confirming speed sign detection
+
+def clear_detected_speed_file():
+    open(SPEED_FILE, 'w').close()  # Clear the file
+
+# Register cleanup for normal exit
+atexit.register(clear_detected_speed_file)
+
+# Register cleanup for Ctrl+C or termination signals
+def handle_signal(signum, frame):
+    clear_detected_speed_file()
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, handle_signal)  # Ctrl+C
+signal.signal(signal.SIGTERM, handle_signal)  # Termination (e.g., system shutdown)
 
 # Check if the provided model path is valid
 if not os.path.exists(model_path):
@@ -113,12 +128,9 @@ frame_rate_buffer = []
 fps_avg_len = 200  # Average FPS over last 200 frames
 img_count = 0  # To keep track of images processed
 
-# Detection buffer to track repeated high-confidence detections
-high_conf_buffer = []
-pause_detection = False
-pause_start_time = None
-frame_wait_after_detection = 3  # seconds
-required_count_for_confirmation = 5
+# Dictionary to count high-threshold detections for each class
+class_detection_count = {'Speed20': 0, 'Speed40': 0, 'Speed60': 0, 'Stop': 0}
+detected_class = {"Speed20": False, "Speed40": False, "Speed60": False, "Stop": False}
 
 # Begin processing loop
 try:
@@ -151,41 +163,6 @@ try:
         # Run YOLO model on the frame
         results = model(frame, verbose=False)
         detections = results[0].boxes  # Get detection boxes
-
-       # Pause logic handling
-        if pause_detection:
-            if time.time() - pause_start_time >= frame_wait_after_detection:
-                pause_detection = False
-                high_conf_buffer.clear()
-            else:
-                # During pause, skip detection and show the frame as-is
-                if source_type != 'image' and source_type != 'folder':
-                    cv2.imshow('YOLO detection results', frame)
-                    key = cv2.waitKey(1) & 0xFF
-                    if key == ord('q'):
-                        break
-                continue
-       # Process high confidence detections
-        for i in range(len(detections)):
-            conf = detections.conf[i].item()
-            class_id = int(detections.cls[i].item())
-            class_name = labels[class_id]
-
-            if conf > CONFIDENCE_THRESHOLD and class_name in ["Speed60", "Speed40", "Speed20", "Stop"]:
-                high_conf_buffer.append(class_name)
-
-        # Only proceed if we have 5 or more consecutive detections
-        if len(high_conf_buffer) >= required_count_for_confirmation:
-            most_common_class = max(set(high_conf_buffer), key=high_conf_buffer.count)
-            if high_conf_buffer.count(most_common_class) >= required_count_for_confirmation:
-                with open(SPEED_FILE, "w") as f:
-                    f.write(most_common_class)
-                print(f"[INFO] Detected and confirmed: {most_common_class}")
-                pause_detection = True
-                pause_start_time = time.time()
-                high_conf_buffer.clear()
-
-        # Draw boxes and labels for all detections above the minimum threshold
         object_count = 0
         for i in range(len(detections)):
             xyxy = detections[i].xyxy.cpu().numpy().squeeze().astype(int)  # Get box coordinates
@@ -202,7 +179,29 @@ try:
                 cv2.rectangle(frame, (xyxy[0], label_ymin - labelSize[1] - 10),
                               (xyxy[0] + labelSize[0], label_ymin + baseLine - 10), color, cv2.FILLED)
                 cv2.putText(frame, label, (xyxy[0], label_ymin - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
-                object_count += 1  # Count valid detections
+                object_count += 1
+
+                # Check if confidence is above threshold
+                if conf > CONFIDENCE_THRESHOLD:
+					if classname in ['Speed20','Speed40','Speed60']:
+						if class_detection_count[classname] < 3:  # Less than 3 detections for this class
+							class_detection_count[classname] += 1  # Increment the count
+                    elif classname =='Stop':
+						if class_detection_count[classname] <5:
+							class_detection_count[classname] += 1   
+                    else:
+                        # Only log to file and reset the count if it's a new class
+                        if detected_class[classname] == False:  # New class detected
+                            with open('detected_speed.txt', 'w') as f:
+                                f.write(f'{classname}\n')  # Write class name to file
+                            detected_class[classname] = True  # Add to the list of detected classes
+                            for key in detected_class:
+                                if key != classname:
+                                    detected_class[key] = False
+                        # Reset the count after threshold is reached to avoid repeated detections
+                        if (classname in ['Speed20', 'Speed40', 'Speed60'] and class_detection_count[classname] == 3) or \
+                           (classname == 'Stop' and class_detection_count[classname] == 5):
+                            class_detection_count[classname] = 0
 
         # Display FPS and object count on frame
         if source_type in ['video', 'usb', 'picamera']:
@@ -240,3 +239,4 @@ finally:
     if 'recorder' in locals() and record:
         recorder.release()
     cv2.destroyAllWindows()  # Close OpenCV display window
+	
