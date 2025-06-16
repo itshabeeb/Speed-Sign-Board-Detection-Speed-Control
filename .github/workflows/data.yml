@@ -1,0 +1,13 @@
+name: Deploy to Raspberry Pi
+on:
+  push:
+    branches:
+      - main
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Run deployment script
+        run: ./deploy.sh
